@@ -1,34 +1,103 @@
----
-
-# Simple Lombok Usage Guidelines (`AGENTS.md`)
+# Lombok Usage Guidelines
 
 ## Purpose
+Define when Lombok is allowed, restricted, or prohibited so code remains explicit, safe, and maintainable.
 
-This document defines **when Lombok is allowed, restricted, or prohibited** in this codebase.
+Lombok is a code-generation tool, not a design tool. Use it to remove mechanical boilerplate, not to hide domain intent or lifecycle behavior.
 
-Lombok is a **code-generation tool**, not a design tool.
-Its role is to reduce *mechanical boilerplate*, **not** to hide intent, weaken invariants, or obscure lifecycle behaviour.
-
----
+## Scope
+Applies to Spring services, DTOs, value objects, entities, domain objects, tests, and framework-facing code in this repository.
 
 ## Core Principles
+1. Explicit behavior beats implicit generation.
+2. Immutability is the default.
+3. Construction rules must be visible.
+4. Domain meaning must not be hidden.
+5. Tests must not rely on Lombok-generated behavior.
 
-1. **Explicit behaviour beats implicit generation**
-2. **Immutability is the default**
-3. **Construction rules must be visible**
-4. **Domain meaning must not be hidden**
-5. **Tests must not rely on Lombok-generated behaviour**
+## Decision Rules
 
-If Lombok reduces clarity or correctness, **do not use it**.
+### Mandatory
+- Use explicit Java when Lombok would obscure invariants, lifecycle, or security boundaries.
+- Keep domain transitions explicit methods, not generated setters.
+- Keep security-sensitive objects free of Lombok-generated representation methods.
 
----
+### Preferred
+- Use `@RequiredArgsConstructor` for constructor injection in Spring classes with `final` dependencies.
+- Use `@Value` for immutable value objects.
+- Keep Lombok use narrow and intentional.
 
-## Allowed Lombok Usage (Default-Approved)
+### Restricted (Requires Justification)
+- `@Builder` is allowed only for immutable value objects, test fixtures, or complex parameter objects.
+- `@ToString` is allowed only when sensitive fields are excluded.
+- `@EqualsAndHashCode` is allowed only for immutable value objects where identity semantics are not required.
 
-### 1. Constructor Injection (Spring)
+### Prohibited
+- `@Data` outside DTOs.
+- `@Data` on entities, services, or domain objects with behavior.
+- Lombok setters/builders on domain objects with invariants or lifecycle transitions.
+- Lombok in security-sensitive classes (credentials, keys, signing/encryption payloads/configs).
+- Lombok in public libraries/SDK/shared modules where API clarity is critical.
+- Lombok in reflection/lifecycle-critical framework glue.
 
-✅ **Recommended**
+## Operational Workflow (Always Follow)
+1. Determine whether the class carries data or domain meaning.
+2. Apply mandatory and prohibited rules first.
+3. If considering restricted annotations, document justification.
+4. Add tests for behavior (not Lombok generation).
+5. Verify no invariant or security risk was introduced.
 
+## Implementation Rules
+
+### Allowed Lombok Usage
+
+#### Constructor Injection (Spring)
+- Use constructor injection only.
+- Keep dependencies `final`.
+- Do not combine with `@AllArgsConstructor` in service classes.
+
+#### Immutable Value Objects
+- `@Value` is allowed when type is immutable, conceptually cohesive, and has no lifecycle transitions.
+
+#### DTOs
+- DTOs may use `@Data`, `@NoArgsConstructor`, and `@AllArgsConstructor` when they remain dumb data carriers.
+
+#### Test Fixtures
+- Immutable test fixture objects may use Lombok for brevity.
+
+### Entity and Domain Safety Rules
+- For JPA entities, only minimal Lombok is allowed (`@Getter`, protected no-arg constructor).
+- Avoid generated equality for identity-based entities.
+- For invariant-heavy domain classes, write constructors and behavior methods explicitly.
+
+## Testing & Verification Rules
+- Do not test Lombok-generated behavior directly.
+- Assert explicit fields and business outcomes.
+- Do not mock data objects only to consume generated accessors.
+- Builders in tests are allowed only for immutable objects/value fixtures, never entities.
+
+## Review Findings Checklist
+Raise findings when:
+- `@Data` appears outside DTO classes.
+- Entity/domain invariants are hidden behind generated setters/builders.
+- Security-sensitive objects use Lombok-generated `toString`/access patterns.
+- Tests rely on generated equality instead of explicit behavior assertions.
+
+## Migration / Refactor Patterns
+
+### Removing Misused `@Data`
+1. Replace with explicit constructors and methods for behavior-heavy classes.
+2. Keep only minimal safe Lombok annotations where justified.
+3. Re-run tests that validate invariants and lifecycle flows.
+
+### Tightening Entity Lombok Usage
+1. Remove broad Lombok annotations from entities.
+2. Keep `@Getter` and protected no-arg constructor if needed.
+3. Review equality and toString for proxy/lazy-loading safety.
+
+## Examples
+
+### Good
 ```java
 @RequiredArgsConstructor
 @Service
@@ -37,18 +106,6 @@ public class PaymentService {
 }
 ```
 
-Rules:
-
-* Use constructor injection only
-* Fields must be `final`
-* Do **not** combine with `@AllArgsConstructor`
-
----
-
-### 2. Immutable Value Objects
-
-✅ **Allowed**
-
 ```java
 @Value
 public class Money {
@@ -56,18 +113,6 @@ public class Money {
     String currency;
 }
 ```
-
-Rules:
-
-* Must be immutable
-* Must represent a single concept
-* No lifecycle or state transitions
-
----
-
-### 3. DTOs (API / Messaging / Serialization)
-
-✅ **Allowed**
 
 ```java
 @Data
@@ -78,124 +123,6 @@ public class CreateOrderRequest {
     private BigDecimal quantity;
 }
 ```
-
-Rules:
-
-* DTOs must remain dumb data carriers
-* No domain logic
-* No invariants enforced here
-
----
-
-### 4. Test Fixtures (Immutable Only)
-
-✅ **Allowed**
-
-```java
-@Value
-static class TestCase {
-    BigDecimal input;
-    BigDecimal expected;
-}
-```
-
-Rules:
-
-* Test-only
-* Immutable
-* Disposable
-
----
-
-## Restricted Lombok Usage (Requires Justification)
-
-### 1. `@Builder`
-
-⚠️ **Use sparingly**
-
-Allowed only for:
-
-* Immutable value objects
-* Test fixtures
-* Complex parameter objects
-
-❌ **Not allowed** for:
-
-* JPA entities
-* Spring beans
-* Domain aggregates
-
----
-
-### 2. `@ToString`
-
-⚠️ **Use with extreme caution**
-
-Rules:
-
-* Must exclude sensitive fields
-* Must never log secrets, credentials, or keys
-
-Example:
-
-```java
-@ToString(exclude = "privateKey")
-```
-
----
-
-### 3. `@EqualsAndHashCode`
-
-⚠️ **Explicit decision required**
-
-Allowed for:
-
-* Immutable value objects
-
-Prohibited for:
-
-* JPA entities
-* Stateful domain objects
-* Objects with identity semantics
-
----
-
-## Prohibited Lombok Usage (Hard Ban)
-
-### 1. `@Data` on Anything Except DTOs
-
-❌ **BANNED**
-
-```java
-@Data
-@Service
-public class OrderService { ... }
-```
-
-Reasons:
-
-* Generates setters (breaks invariants)
-* Generates `equals/hashCode` (breaks proxies)
-* Generates `toString()` (risk of leaks)
-
----
-
-### 2. JPA Entities (Except Minimal Use)
-
-❌ **BANNED**
-
-```java
-@Data
-@Entity
-public class Order { ... }
-```
-
-Allowed only:
-
-* `@Getter`
-* `@NoArgsConstructor(access = PROTECTED)`
-
-Example:
 
 ```java
 @Getter
@@ -208,162 +135,26 @@ public class Order {
 }
 ```
 
----
-
-### 3. Domain Objects with Invariants
-
-❌ **BANNED**
-
-If an object:
-
-* Requires validation
-* Enforces business rules
-* Prevents illegal states
-
-Then:
-
-* Write constructors explicitly
-* Write methods explicitly
-* Do **not** use Lombok setters or builders
-
----
-
-### 4. State Machines / Lifecycle Objects
-
-❌ **BANNED**
-
-Examples:
-
-* Orders
-* Trades
-* KYC status
-* Workflow states
-
-Rules:
-
-* No Lombok setters
-* State transitions must be explicit methods
-
----
-
-### 5. Security-Sensitive Objects
-
-❌ **BANNED**
-
-Includes:
-
-* API keys
-* Private keys
-* Credentials
-* Signing payloads
-* Encryption configs
-
-Rule:
-
-> If logging this object would be a security incident, Lombok must not be used.
-
----
-
-### 6. Public Libraries / SDKs / Shared Modules
-
-❌ **BANNED**
-
-Reasons:
-
-* Lombok hides behaviour from consumers
-* Generated methods are invisible in source
-* Breaks API clarity
-
----
-
-### 7. Framework Glue / Reflection-Critical Code
-
-❌ **BANNED**
-
-Includes:
-
-* Serialization glue
-* Proxy-heavy code
-* Lifecycle hooks
-* Reflection-based frameworks
-
-Explicit Java is required.
-
----
-
-## Lombok & Testing Rules
-
-### 1. Do Not Test Lombok Behaviour
-
-❌ **BANNED**
-
+### Avoid
 ```java
-assertEquals(a, b); // relies on Lombok equals()
+@Data
+@Entity
+public class Order { ... }
 ```
 
-✅ **Required**
-
-* Assert explicit fields
-* Assert behaviour, not annotations
-
----
-
-### 2. Do Not Mock Data Objects
-
-❌ **BANNED**
-
 ```java
-when(order.getStatus()).thenReturn(PENDING);
+@Data
+@Service
+public class OrderService { ... }
 ```
 
-Rule:
+## Pre-Completion Checklist
+- [ ] Lombok usage classified as allowed/restricted/prohibited.
+- [ ] Restricted annotations include explicit justification.
+- [ ] Domain invariants remain explicit in code.
+- [ ] Tests validate behavior instead of annotation side effects.
 
-* Mock collaborators
-* Use real data objects
-
----
-
-### 3. Builders in Tests
-
-Allowed only for:
-
-* Immutable objects
-* Value objects
-* Test fixtures
-
-❌ **Never for entities**
-
----
-
-## Decision Rule (If Unsure)
-
-Ask **one question**:
-
-> Does this class carry **data**, or does it carry **meaning**?
-
-* Data → Lombok is acceptable
-* Meaning → Lombok should be minimal or absent
-
-If you have to explain Lombok usage in a review, it’s probably wrong.
-
----
-
-## Enforcement
-
-Pull Requests **must be rejected** if they:
-
-* Introduce `@Data` outside DTOs
-* Use Lombok in entities incorrectly
-* Hide invariants behind setters/builders
-* Rely on Lombok-generated behaviour in tests
-
----
-
-## Final Statement
-
-Lombok does **not** simplify systems.
-It simplifies **typing**.
-
-Use it to remove noise—not responsibility.
-
----
+## Output Expectations for Agents
+- State where Lombok was used and why.
+- Call out any restricted usage and its justification.
+- Report verification performed and residual risks.
