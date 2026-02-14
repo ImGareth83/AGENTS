@@ -38,6 +38,31 @@ This repository currently serves as a curated set of agent instructions and codi
 3. Apply the rules directly in code and tests.
 4. Keep changes small and review-friendly.
 
+## AGENTS.md Standard Structure
+
+All `AGENTS.md` files should follow this shared template:
+
+1. `# Title`
+2. `## Purpose`
+3. `## Scope`
+4. `## Core Principles`
+5. `## Decision Rules`
+6. `## Operational Workflow (Always Follow)`
+7. `## Implementation Rules`
+8. `## Testing & Verification Rules`
+9. `## Review Findings Checklist`
+10. `## Migration / Refactor Patterns`
+11. `## Examples`
+12. `## Pre-Completion Checklist`
+13. `## Output Expectations for Agents`
+
+Inside `## Decision Rules`, use:
+
+- `### Mandatory`
+- `### Preferred`
+- `### Restricted (Requires Justification)`
+- `### Prohibited`
+
 ## Current Status
 
 This repo is instruction-first and does not yet include runnable sample projects or exercises.  
